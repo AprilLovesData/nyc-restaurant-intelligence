@@ -1,0 +1,10 @@
+pandas>=2.0
+numpy>=1.24
+jupyter>=1.0
+matplotlib>=3.7
+tabulate>=0.9          # required by DataFrame.to_markdown()
+
+# Mapping (needed for the spatial work in notebook 03)
+# geopandas>=0.14
+# shapely>=2.0
+# folium>=0.15

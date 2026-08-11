@@ -1,0 +1,11 @@
+step,detail,rows_before,rows_after
+D-01,Dropped fully duplicated rows,294976.0,294826.0
+F-02,"Normalised 4 text fields (39,562 STREET values changed)",,
+F-01,"BORO ""0"" -> ""Unknown"" (372 rows)",,
+M-03,"Missing cuisine -> UNKNOWN (3,721 rows across 3,643 restaurants)",,
+M-02,"SCORE cast to numeric, 17,119 nulls preserved (not imputed)",,
+O-01,Added score_winsorized (clipped at 99th percentile = 93); raw score unchanged,,
+O-02,"1900 placeholder dates -> NaT; flagged 3,641 never-inspected restaurants",,
+O-03,"(0,0) coordinates -> NaN (3,042 rows); 290,083 rows remain mappable",,
+derived,Added 6 derived fields (is_critical / is_closed_action / has_violation / inspection_category / inspection_stage / is_gradeable),,
+B-01,Boundary area/length de-comma'd and cast to float,,
