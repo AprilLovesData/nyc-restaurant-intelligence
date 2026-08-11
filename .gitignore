@@ -16,6 +16,10 @@ data/processed/*
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*
 
+# ---- Streamlit ----
+# Credentials never go in the repository. The .example file does.
+.streamlit/secrets.toml
+
 # ---- Python ----
 __pycache__/
 *.py[cod]

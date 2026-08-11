@@ -125,6 +125,31 @@ the repository as `data/cleaned/borough_boundaries.csv`, the one tracked file un
 Run `sql/schema.sql` to create the tables. It enables row level security and grants only
 `select` to the anonymous role, so the public API is read-only.
 
+## Dashboard
+
+`streamlit_app.py` reads the Supabase tables and lets a visitor ask their own question of
+the data, which is the one thing the notebooks cannot do: someone in Korean dining can
+filter to Korean and the Bronx and read the answer off the screen, a combination no chart
+in the report happens to show.
+
+```bash
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # then fill in your values
+streamlit run streamlit_app.py
+```
+
+Filters for borough, cuisine and neighbourhood size drive four KPIs, a point map, the
+cuisine mix, a location-quotient heatmap and a sortable neighbourhood table.
+
+Three details worth knowing if you read the code:
+
+- **Supabase caps a response at 1000 rows and does not say so.** Requesting 31,222
+  restaurants returns 1000 with a `200 OK`. The loader asks Postgres for an exact count
+  first, then fetches every page in parallel and checks the total it assembled.
+- **CSV, not JSON.** JSON repeats each field name on every row, which is most of the
+  payload at this size — 8.3 MB against 3.0 MB.
+- **The first load is cached to disk.** The data is a static snapshot, so later runs start
+  instantly; the sidebar can force a refresh.
+
 ## Getting started
 
 ```bash
@@ -144,7 +169,8 @@ Notebook 01 must run first — it generates the cleaned tables that Notebook 02 
 - [x] NTA reference join — neighbourhood names and population, enabling per-capita analysis
       at neighbourhood resolution
 - [x] Database — normalised schema loaded into Supabase, [notebooks/04_database_schema.ipynb](notebooks/04_database_schema.ipynb)
-- [ ] Streamlit dashboard reading from Supabase
+- [x] Streamlit dashboard reading from Supabase — [streamlit_app.py](streamlit_app.py)
+- [ ] Deploy the dashboard to Streamlit Community Cloud
 - [ ] 2010 NTA polygons from the NYC Planning archive (no longer on the open data portal)
 - [ ] Census demographics join, to separate genuine gaps from differing demand
 
