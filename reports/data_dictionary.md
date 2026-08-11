@@ -44,6 +44,7 @@
 
 | column              | dtype          |   non_null |   n_unique |
 |:--------------------|:---------------|-----------:|-----------:|
+| inspection_id       | int64          |      93106 |      93106 |
 | camis               | object         |      93106 |      27581 |
 | inspection_date     | datetime64[ns] |      93106 |       1975 |
 | inspection_type     | object         |      93106 |         36 |
@@ -67,6 +68,7 @@
 
 | column                | dtype          |   non_null |   n_unique |
 |:----------------------|:---------------|-----------:|-----------:|
+| inspection_id         | int64          |     288486 |      90407 |
 | camis                 | object         |     288486 |      27489 |
 | dba                   | object         |     288486 |      21420 |
 | boro                  | object         |     288486 |          6 |

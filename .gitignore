@@ -7,6 +7,11 @@ data/processed/*
 !data/**/.gitkeep
 !data/raw/README.md
 
+# Borough outlines are the exception: 2.9 MB of static map geometry that never
+# changes and is not in the database (see notebook 04). The dashboard reads it
+# from here, so it has to travel with the code.
+!data/cleaned/borough_boundaries.csv
+
 # ---- Notebooks ----
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*
