@@ -1,8 +1,16 @@
 # NYC Restaurant Intelligence Platform — Market Overview
 
+**Live dashboard: [nyc-restaurant-intelligence.streamlit.app](https://nyc-restaurant-intelligence.streamlit.app)**
+
 Restaurant market analysis for New York City, built on NYC DOHMH health inspection data.
-This module covers data quality auditing, cleaning, and baseline analysis of market size,
-cuisine landscape and borough composition.
+Covers data quality auditing, cleaning, a normalised Postgres schema, and analysis of
+market size, cuisine landscape and neighbourhood composition — ending in an interactive
+dashboard served from Supabase.
+
+```
+3 source datasets  ->  4 notebooks  ->  5 database tables  ->  1 interactive dashboard
+                       audit / clean / analyse / model
+```
 
 ## Project structure
 
