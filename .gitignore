@@ -1,0 +1,23 @@
+# ---- Data files: not tracked ----
+# The raw inspection extract is 158 MB, over GitHub's 100 MB per-file limit.
+# Cleaned outputs are reproducible by running notebook 01.
+data/raw/*
+data/cleaned/*
+data/processed/*
+!data/**/.gitkeep
+!data/raw/README.md
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# ---- OS ----
+.DS_Store
+.claude/

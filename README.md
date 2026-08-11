@@ -14,7 +14,8 @@ gateway-restaurant-project/
 │   └── processed/      # Aggregated data for modelling and visualisation
 ├── notebooks/
 │   ├── 01_data_quality_check.ipynb   # Quality audit + cleaning
-│   └── 02_market_overview.ipynb      # Borough x cuisine market landscape
+│   ├── 02_market_overview.ipynb      # Borough x cuisine market landscape
+│   └── 03_geographic_analysis.ipynb  # Maps + neighbourhood (NTA) drill-down
 ├── reports/
 │   ├── data_quality_report.md        # Auto-generated issue list
 │   ├── data_dictionary.md            # Field-level documentation
@@ -74,6 +75,28 @@ rows. This is why the cleaned data is split by grain.
 > different local demand, or operators who tried and closed. Separating those causes needs
 > census demographics and opening/closing histories. See Notebook 02, section 6.
 
+## Key findings (Notebook 03)
+
+1. **Restaurants follow a corridor, not borough boundaries** — one continuous dense spine
+   runs through Manhattan into north-west Brooklyn and western Queens, crossing three
+   boroughs and respecting none of them
+2. **Borough averages describe almost no actual neighbourhood**: Manhattan's 29 NTAs range
+   from 11 to 2,258 restaurants, a **205x** spread. Brooklyn spans 41x, Queens 34x
+3. **The within-borough gap dwarfs the between-borough gap**: the Manhattan-to-Bronx ratio
+   (4.1x) is smaller than the spread between two Bronx neighbourhoods (14x)
+4. **One neighbourhood outweighs a borough**: `MN17` holds 2,258 restaurants, comparable to
+   the entire Bronx (2,632) spread across 38 NTAs
+5. **Size is not variety**: cuisine diversity plateaus near 3.2 past ~200 restaurants, but
+   **Flushing** has 500+ restaurants at a diversity of 1.99, well under the 2.85 median —
+   a single-cuisine destination rather than a supply shortfall
+6. **Per-capita density separates destinations from neighbourhoods**: Midtown carries 788.7
+   restaurants per 10,000 residents against a median of 23.7, a 282x spread. The thinnest
+   coverage is in large residential neighbourhoods — Soundview-Castle Hill (7.5), South
+   Jamaica (8.2), and Borough Park, whose 106,357 residents are served by 116 restaurants
+
+> Consequence: market analysis in this project should be done at **NTA level**. Borough
+> figures work as headlines and fail as a basis for siting decisions.
+
 ## Getting started
 
 ```bash
@@ -89,7 +112,10 @@ Notebook 01 must run first — it generates the cleaned tables that Notebook 02 
 - [x] Data quality audit — 12 issues documented in [reports/data_quality_report.md](reports/data_quality_report.md)
 - [x] Cleaning — 3 analysis tables, 12 validation checks passing, fields documented in [reports/data_dictionary.md](reports/data_dictionary.md)
 - [x] Market Overview — borough x cuisine landscape, [notebooks/02_market_overview.ipynb](notebooks/02_market_overview.ipynb)
-- [ ] Mapping and NTA-level drill-down
+- [x] Geographic analysis — maps and NTA drill-down, [notebooks/03_geographic_analysis.ipynb](notebooks/03_geographic_analysis.ipynb)
+- [x] NTA reference join — neighbourhood names and population, enabling per-capita analysis
+      at neighbourhood resolution
+- [ ] 2010 NTA polygons from the NYC Planning archive (no longer on the open data portal)
 - [ ] Census demographics join, to separate genuine gaps from differing demand
 
 ## Data source
