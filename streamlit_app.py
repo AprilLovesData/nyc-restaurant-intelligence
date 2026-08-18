@@ -242,7 +242,8 @@ boroughs = st.sidebar.multiselect(
     "Borough",
     options=BORO_ORDER,
     default=BORO_ORDER,
-    help="Unknown-borough records are always excluded.",
+    help="New York's five boroughs. A handful of records have no borough on file "
+         "and are always left out.",
 )
 
 cuisine_options = (
@@ -252,28 +253,31 @@ cuisines = st.sidebar.multiselect(
     "Cuisine",
     options=cuisine_options,
     default=[],
-    help="Leave empty to include every cuisine.",
+    help="Pick one or more to focus the whole page on them. Leave it empty to see "
+         "everything. Categories come from the health department's own records.",
 )
 
 min_stores = st.sidebar.slider(
-    "Minimum restaurants per neighbourhood",
+    "Hide small neighbourhoods",
     min_value=0, max_value=200, value=30, step=10,
-    help="Filters the neighbourhood table only. Small neighbourhoods produce "
-         "noisy rankings.",
+    help="Leaves neighbourhoods with fewer than this many restaurants out of the "
+         "table at the bottom. A neighbourhood with three restaurants can top any "
+         "ranking by chance, which is rarely what you want to see.",
 )
 
 st.sidebar.divider()
 
 if CACHE_DIR.exists():
-    st.sidebar.caption("Reading a local snapshot of the database.")
-    if st.sidebar.button("Refresh from Supabase", use_container_width=True):
+    st.sidebar.caption("Showing a saved copy of the data so the page loads quickly.")
+    if st.sidebar.button("Reload latest data", use_container_width=True):
         shutil.rmtree(CACHE_DIR)
         st.cache_data.clear()
         st.rerun()
 
 st.sidebar.caption(
-    "Source: NYC DOHMH inspection records. These are inspected food service "
-    "establishments, not a business registry."
+    "Source: New York City Health Department restaurant inspection records. "
+    "This covers places the city has inspected — it is not a full business "
+    "directory."
 )
 
 # --------------------------------------------------------------------- filter
@@ -284,9 +288,33 @@ if cuisines:
 
 st.title("NYC Restaurant Market Overview")
 st.caption(
-    f"{len(restaurants):,} restaurants across 193 neighbourhoods · "
-    "data from NYC DOHMH inspection records"
+    f"Every one of the {len(restaurants):,} food businesses on record with the "
+    "New York City Health Department, and what their spread across the city shows."
 )
+
+with st.expander("New here? How to read this page", expanded=True):
+    st.markdown(
+        """
+**What this is.** Every restaurant, café and takeaway the New York City Health
+Department inspects — where they are, what they serve, and how clean they were found
+to be. Use the filters on the left to narrow it down to the boroughs and cuisines you
+care about; everything on the page updates together.
+
+**Four things worth knowing**
+
+- **Hygiene scores work backwards.** A *low* score is good. Inspectors add points for
+  each problem they find, so 5 points is a cleaner kitchen than 30. The city awards an
+  **A** at 13 points or below.
+- **"Concentrated" is not the same as "popular".** The heatmap further down compares
+  each borough against the city as a whole, which is a fairer test than raw counts —
+  a borough can have the most pizzerias simply by being the biggest borough.
+- **Not every gap is an opening.** A cuisine being scarce somewhere can mean an
+  untapped market, or it can mean the locals there simply do not order it. This page
+  shows you where to look, not what to conclude.
+- **These are inspection records, not a business directory.** A place that has never
+  been inspected will not appear here, and a place that closed years ago might.
+        """
+    )
 
 if view.empty:
     st.warning("No restaurants match these filters. Widen the selection to continue.")
@@ -297,17 +325,30 @@ if view.empty:
 known_cuisine = view[~view["cuisine"].isin(NON_CUISINES)]
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Restaurants", f"{len(view):,}")
-col2.metric("Neighbourhoods", f"{view['nta_code'].nunique():,}")
+col1.metric(
+    "Restaurants",
+    f"{len(view):,}",
+    help="Food businesses on record with the city health department, within the "
+         "filters you have set on the left.",
+)
+col2.metric(
+    "Neighbourhoods",
+    f"{view['nta_code'].nunique():,}",
+    help="How many of the city's official neighbourhood areas these restaurants "
+         "sit in. New York has 193 of them in total.",
+)
 col3.metric(
-    "Median score",
+    "Typical hygiene score",
     f"{view['avg_score'].median():.1f}" if view["avg_score"].notna().any() else "—",
-    help="Median of each restaurant's average inspection score. Higher is worse.",
+    help="The middle restaurant's average inspection score — half score better, half "
+         "worse. LOWER IS BETTER: inspectors add points for each problem found. "
+         "13 points or below earns an A grade from the city.",
 )
 col4.metric(
-    "Ever closed by DOHMH",
+    "Shut down at least once",
     f"{view['ever_closed'].mean() * 100:.1f}%",
-    help="Share of restaurants shut down at least once.",
+    help="Share of these restaurants the health department has ordered closed at "
+         "some point since 2007. Most reopen after fixing the problem.",
 )
 
 st.divider()
@@ -318,6 +359,7 @@ map_col, mix_col = st.columns([3, 2], gap="large")
 
 with map_col:
     st.subheader("Where they are")
+    st.caption("Each dot is one restaurant. Hover to see its name and cuisine.")
     mappable = view.dropna(subset=["latitude", "longitude"])
 
     fig_map = px.scatter_map(
@@ -338,12 +380,14 @@ with map_col:
     )
     st.plotly_chart(fig_map, use_container_width=True)
     st.caption(
-        f"{len(mappable):,} of {len(view):,} shown — "
-        f"{len(view) - len(mappable):,} were never geocoded."
+        f"{len(mappable):,} of {len(view):,} shown. The other "
+        f"{len(view) - len(mappable):,} have no map location on file, so they count "
+        "in the totals above but cannot be placed here."
     )
 
 with mix_col:
-    st.subheader("Cuisine mix")
+    st.subheader("What they serve")
+    st.caption("The 15 most common cuisines in your current selection.")
     top_cuisines = known_cuisine["cuisine"].value_counts().head(15).sort_values()
 
     fig_mix = go.Figure(
@@ -365,20 +409,34 @@ with mix_col:
     )
     st.plotly_chart(fig_mix, use_container_width=True)
     st.caption(
-        f"Base: {len(known_cuisine):,} restaurants with a known cuisine "
-        f"({len(view) - len(known_cuisine):,} unlabelled and excluded)."
+        f"Out of {len(known_cuisine):,} restaurants with a cuisine worth counting. "
+        f"Another {len(view) - len(known_cuisine):,} are either blank or filed simply "
+        "as \"Other\", so they sit in the totals above but not in this chart."
     )
 
 st.divider()
 
 # ------------------------------------------------------- location quotient
 
-st.subheader("Cuisine concentration by borough")
+st.subheader("Which cuisines cluster where")
+st.markdown(
+    "Counting restaurants alone mostly tells you which borough is biggest. This "
+    "compares each borough **against the city as a whole** instead, so the size of the "
+    "borough cancels out."
+)
+st.markdown(
+    """
+| You see | It means |
+|---|---|
+| **1.0** | This borough has its fair share — same as the city average |
+| **2.0** | **Twice** as concentrated here as citywide — a local speciality |
+| **0.5** | **Half** as common here as citywide — thin on the ground |
+"""
+)
 st.caption(
-    "Location quotient — a cuisine's share of a borough divided by its share of the "
-    "whole city. 1.00 means in line with the city; above means over-represented. "
-    "The citywide baseline is always the full dataset, so filtering boroughs does not "
-    "move the reference point."
+    "Blue = more of this cuisine than the city average · Red = less · Grey = about "
+    "average. The city-wide comparison always uses all five boroughs, so changing the "
+    "borough filter never moves the goalposts."
 )
 
 lq_cuisines = cuisines if cuisines else citywide_share.head(12).index.tolist()
@@ -394,7 +452,7 @@ if lq_view.empty or not lq_boroughs:
 else:
     fig_lq = px.imshow(
         lq_view,
-        labels={"x": "", "y": "", "color": "Location quotient"},
+        labels={"x": "", "y": "", "color": "vs city average"},
         x=lq_view.columns,
         y=[c.title() for c in lq_view.index],
         color_continuous_scale=DIVERGING,
@@ -404,7 +462,7 @@ else:
         height=max(320, 42 * len(lq_view)),
     )
     fig_lq.update_traces(
-        hovertemplate="%{y} in %{x}<br>LQ %{z:.2f}<extra></extra>",
+        hovertemplate="%{y} in %{x}<br>%{z:.2f}x the city average<extra></extra>",
         xgap=2, ygap=2,
     )
     fig_lq.update_layout(margin={"l": 0, "r": 0, "t": 10, "b": 0})
@@ -414,7 +472,11 @@ st.divider()
 
 # ------------------------------------------------------- neighbourhood table
 
-st.subheader("Neighbourhoods")
+st.subheader("Neighbourhood by neighbourhood")
+st.caption(
+    "Borough averages hide a great deal. Manhattan's busiest neighbourhood has "
+    "2,258 restaurants and its quietest has 11 — both are 'Manhattan'."
+)
 
 nta_stats = (
     view.dropna(subset=["nta_code"])
@@ -444,11 +506,11 @@ else:
         .rename(columns={
             "nta_name": "Neighbourhood", "borough": "Borough",
             "restaurants": "Restaurants", "population_2010": "Residents",
-            "per_10k": "Per 10k residents", "avg_score": "Avg score",
-            "nta_code": "NTA",
+            "per_10k": "Restaurants per 10,000 residents",
+            "avg_score": "Typical hygiene score",
         })
-        [["Neighbourhood", "Borough", "NTA", "Restaurants", "Residents",
-          "Per 10k residents", "Avg score"]]
+        [["Neighbourhood", "Borough", "Restaurants", "Residents",
+          "Restaurants per 10,000 residents", "Typical hygiene score"]]
         .sort_values("Restaurants", ascending=False)
     )
 
@@ -458,25 +520,47 @@ else:
         hide_index=True,
         height=420,
         column_config={
+            "Neighbourhood": st.column_config.TextColumn(
+                help="The city's official neighbourhood areas — the same ones used "
+                     "for census reporting."
+            ),
             "Restaurants": st.column_config.NumberColumn(format="%d"),
-            "Residents": st.column_config.NumberColumn(format="%d"),
-            "Per 10k residents": st.column_config.NumberColumn(format="%.1f"),
-            "Avg score": st.column_config.NumberColumn(
-                format="%.1f", help="Higher is worse."
+            "Residents": st.column_config.NumberColumn(
+                format="%d", help="People living there, 2010 Census."
+            ),
+            "Restaurants per 10,000 residents": st.column_config.NumberColumn(
+                format="%.1f",
+                help="How well the people who live there are served. Read business "
+                     "districts with care: Midtown scores enormously high because it "
+                     "feeds commuters and tourists, not its few residents.",
+            ),
+            "Typical hygiene score": st.column_config.NumberColumn(
+                format="%.1f",
+                help="Lower is better. 13 or below is A-grade territory.",
             ),
         },
     )
     st.caption(
-        f"{len(display)} neighbourhoods with at least {min_stores} restaurants. "
-        "Click a column header to sort. Population is the 2010 Census; park and "
-        "cemetery tracts are excluded."
+        f"Showing {len(display)} neighbourhoods with at least {min_stores} "
+        "restaurants — smaller ones are left out because a handful of restaurants "
+        "makes for a jumpy ranking. Click any column heading to sort by it. Parks "
+        "and cemeteries are excluded, since almost nobody lives in them."
     )
 
 # ------------------------------------------------------------------- footer
 
 st.divider()
+st.markdown(
+    """
+**Before you act on anything here.** A cuisine being scarce in a neighbourhood is a
+question worth asking, not an answer. It can mean nobody has served that market yet —
+or that the people living there do not want it, cannot afford it, or that somebody
+tried and closed. This data cannot tell those apart. Treat a gap as a place to go and
+look, not as a business case.
+    """
+)
 st.caption(
-    "A low count or a low location quotient is a question, not an answer — it may "
-    "equally reflect local demand, income or dining habits rather than an unserved "
-    "market. See notebooks 02 and 03 for the full caveats."
+    "Restaurant counts and hygiene scores: New York City Health Department inspection "
+    "records, updated daily. Population: 2010 US Census. Full method and its limits: "
+    "github.com/AprilLovesData/nyc-restaurant-intelligence"
 )
