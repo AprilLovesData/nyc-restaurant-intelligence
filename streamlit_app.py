@@ -39,6 +39,11 @@ INK_SOFT = "#52514e"
 NON_CUISINES = ["UNKNOWN", "OTHER"]
 BORO_ORDER = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
 
+# The date the source CSV was pulled from NYC Open Data. Nothing in this pipeline
+# refreshes itself, so this is stated on the page rather than left for the reader
+# to assume the data is current.
+SNAPSHOT_DATE = "11 August 2026"
+
 # --------------------------------------------------------------------- access
 
 # A door on the page, not a lock on the data.
@@ -338,16 +343,21 @@ min_stores = st.sidebar.slider(
 st.sidebar.divider()
 
 if CACHE_DIR.exists():
-    st.sidebar.caption("Showing a saved copy of the data so the page loads quickly.")
-    if st.sidebar.button("Reload latest data", use_container_width=True):
+    st.sidebar.caption("Showing a saved copy so the page loads quickly.")
+    # Deliberately not called "latest": this reaches the database, and the database
+    # is itself a fixed snapshot. Nothing here goes back to the city's live feed.
+    if st.sidebar.button("Re-read from database", use_container_width=True):
         shutil.rmtree(CACHE_DIR)
         st.cache_data.clear()
         st.rerun()
 
 st.sidebar.caption(
-    "Source: New York City Health Department restaurant inspection records. "
-    "This covers places the city has inspected — it is not a full business "
-    "directory."
+    f"Source: New York City Health Department restaurant inspection records, "
+    f"**downloaded {SNAPSHOT_DATE}**. The city updates its records daily; this "
+    "dashboard reads a fixed copy taken on that date, so newly opened or newly "
+    "inspected restaurants will not appear until the snapshot is refreshed. "
+    "Note also that it covers places the city has inspected — it is not a full "
+    "business directory."
 )
 
 # --------------------------------------------------------------------- filter
