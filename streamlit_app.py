@@ -9,6 +9,7 @@ Run locally:
 
 from __future__ import annotations
 
+import hmac
 import io
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +38,67 @@ INK_SOFT = "#52514e"
 # Cuisines that carry no information: one is a placeholder, the other a catch-all.
 NON_CUISINES = ["UNKNOWN", "OTHER"]
 BORO_ORDER = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
+
+# --------------------------------------------------------------------- access
+
+# A door on the page, not a lock on the data.
+#
+# This gate decides who may open the dashboard. It does NOT decide who may read the
+# underlying rows: the Supabase key ships inside the app, so anyone who knows the
+# REST endpoint can still query the tables directly. Real per-user data isolation
+# belongs in Supabase row level security, keyed on an authenticated user — which is
+# a separate piece of work, and the one that actually protects anything.
+#
+# Credentials live in secrets.toml (git-ignored), never in this file.
+
+
+def _credentials_match(username: str, password: str) -> bool:
+    users = st.secrets.get("auth", {}).get("users", {})
+    expected = users.get(username)
+    if expected is None:
+        # Compare anyway, against a dummy of similar length, so that a wrong
+        # username and a wrong password take the same time to reject.
+        hmac.compare_digest(password, "x" * len(password))
+        return False
+    return hmac.compare_digest(str(expected), password)
+
+
+def require_login() -> str:
+    """Show the dashboard only to a signed-in visitor. Returns the username."""
+    if "auth_user" in st.session_state:
+        return st.session_state["auth_user"]
+
+    if "auth" not in st.secrets or not st.secrets["auth"].get("users"):
+        st.error(
+            "No sign-in credentials are configured, so the dashboard is closed.\n\n"
+            "Add them to `.streamlit/secrets.toml`:\n\n"
+            "```toml\n[auth.users]\nyour_username = \"your_password\"\n```\n\n"
+            "On Streamlit Community Cloud, paste the same block into "
+            "**Settings → Secrets**."
+        )
+        st.stop()
+
+    _, middle, _ = st.columns([1, 1.4, 1])
+    with middle:
+        st.title("NYC Restaurant Market Overview")
+        st.caption("Gateway Solutions · please sign in to continue")
+
+        with st.form("sign_in"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in", use_container_width=True)
+
+        if submitted:
+            if _credentials_match(username, password):
+                st.session_state["auth_user"] = username
+                st.rerun()
+            else:
+                st.error("That username and password combination was not recognised.")
+
+    st.stop()
+
+
+current_user = require_login()
 
 # ---------------------------------------------------------------- data access
 
@@ -235,6 +297,14 @@ baseline = restaurants[
 citywide_share = baseline["cuisine"].value_counts(normalize=True)
 
 # ------------------------------------------------------------------- sidebar
+
+with st.sidebar:
+    signed_in, sign_out = st.columns([2, 1], vertical_alignment="center")
+    signed_in.caption(f"Signed in as **{current_user}**")
+    if sign_out.button("Sign out", use_container_width=True):
+        del st.session_state["auth_user"]
+        st.rerun()
+    st.divider()
 
 st.sidebar.title("Filters")
 
