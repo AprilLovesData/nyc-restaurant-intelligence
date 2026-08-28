@@ -12,6 +12,10 @@ data/processed/*
 # from here, so it has to travel with the code.
 !data/cleaned/borough_boundaries.csv
 
+# Neighbourhood income and rent from the Census ACS: 194 rows of static
+# reference data the dashboard scores against. Small, and it never changes.
+!data/cleaned/nta_acs_2022.csv
+
 # ---- Notebooks ----
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*
