@@ -136,6 +136,28 @@ the repository as `data/cleaned/borough_boundaries.csv`, the one tracked file un
 Run `sql/schema.sql` to create the tables. It enables row level security and grants only
 `select` to the anonymous role, so the public API is read-only.
 
+## Location Finder
+
+Pick a cuisine and the dashboard ranks every neighbourhood in the city on how well it
+would suit that concept, then shows the reasoning so it can be argued with.
+
+The score blends three components — **unmet demand** (residents per existing
+restaurant of that cuisine), **spending power** (median household income), and
+**dining culture** (restaurants per resident overall). Each is percentile-ranked
+before weighting, because dollars and headcounts cannot be averaged directly. The
+weights are sliders on the page: there is no objectively correct weighting, and a
+score whose assumptions cannot be changed invites more trust than it deserves.
+
+Full method, exclusions and limitations: [docs/scoring_methodology.md](docs/scoring_methodology.md).
+
+**A worked result.** For Korean, the top-ranked neighbourhood is the Upper West Side:
+132,378 residents, $140,206 median household income, and **zero** Korean restaurants.
+Checked against the records rather than taken on trust — the neighbourhood holds 413
+restaurants of which 58 are Asian (22 Chinese, 18 Japanese, 6 Thai), so the absence is
+specific to Korean, and Korean restaurants citywide cluster in Midtown (93) and Murray
+Hill, Queens (90). It is a real gap in the data. Whether it is an opportunity is a
+different question, and the page says so.
+
 ## Dashboard
 
 `streamlit_app.py` reads the Supabase tables and lets a visitor ask their own question of
@@ -181,7 +203,10 @@ Notebook 01 must run first — it generates the cleaned tables that Notebook 02 
       at neighbourhood resolution
 - [x] Database — normalised schema loaded into Supabase, [notebooks/04_database_schema.ipynb](notebooks/04_database_schema.ipynb)
 - [x] Streamlit dashboard reading from Supabase — [streamlit_app.py](streamlit_app.py)
-- [ ] Deploy the dashboard to Streamlit Community Cloud
+- [x] Deployed to Streamlit Community Cloud, behind a sign-in gate
+- [x] Location Finder — opportunity scoring with adjustable weights, [docs/scoring_methodology.md](docs/scoring_methodology.md)
+- [ ] Household composition and age from ACS, to model demand beyond income alone
+- [ ] Commercial rent, so the score reflects cost as well as opportunity
 - [ ] 2010 NTA polygons from the NYC Planning archive (no longer on the open data portal)
 - [ ] Census demographics join, to separate genuine gaps from differing demand
 
