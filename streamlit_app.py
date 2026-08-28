@@ -61,6 +61,11 @@ RING_RE = re.compile(r"\(([-0-9\.\s,]+)\)")
 # without this correction the city comes out horizontally squashed.
 NYC_ASPECT = 1 / np.cos(np.radians(40.7))
 
+# Plotly disables scroll-zoom by default so a chart does not hijack the page
+# scroll. On a map that is the interaction people expect, so it is turned on.
+MAP_CONFIG = {"scrollZoom": True, "displayModeBar": True,
+              "modeBarButtonsToRemove": ["select2d", "lasso2d"]}
+
 
 @st.cache_data
 def borough_outlines() -> list[list[tuple[float, float]]]:
@@ -462,15 +467,19 @@ st.caption(
 
 # Scott's note was that a map, a bar chart and a heatmap stacked down one page
 # reads as a pile of outputs rather than a product. Splitting the page by the
-# question each half answers — what does the market look like, and where should
-# I open — gives it the shape of a tool.
-tab_overview, tab_finder, tab_gaps = st.tabs([
-    "Market Overview",
-    "Location Finder",
-    "Market Gaps",
-])
+# question each section answers gives it the shape of a tool.
+#
+# A segmented control rather than st.tabs, because tabs build every panel at once
+# and a map inside a hidden one initialises at zero width and never recovers —
+# which is how both maps turned into grey boxes. Only the chosen section is built
+# here, so every map is laid out in a container that is actually on screen.
+SECTIONS = ["Market Overview", "Location Finder", "Market Gaps"]
+section = st.segmented_control(
+    "Section", SECTIONS, default=SECTIONS[0], label_visibility="collapsed",
+)
+section = section or SECTIONS[0]   # the control returns None when deselected
 
-with tab_overview:
+if section == "Market Overview":
     with st.expander("New here? How to read this page", expanded=True):
         st.markdown(
             """
@@ -550,7 +559,7 @@ with tab_overview:
                           "<br>%{customdata[2]}<extra></extra>",
             showlegend=False,
         ))
-        st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(fig_map, use_container_width=True, config=MAP_CONFIG)
         st.caption(
             f"{len(mappable):,} of {len(view):,} shown. The other "
             f"{len(view) - len(mappable):,} have no map location on file, so they count "
@@ -721,7 +730,7 @@ with tab_overview:
 
 # ------------------------------------------------------------ location finder
 
-with tab_finder:
+if section == "Location Finder":
     st.subheader("Where should this concept open?")
     st.markdown(
         "Pick a cuisine and this ranks every neighbourhood in the city on how well "
@@ -872,7 +881,7 @@ with tab_finder:
                               "<br>%{customdata[2]} existing<extra></extra>",
                 showlegend=False,
             ))
-            st.plotly_chart(fig_score, use_container_width=True)
+            st.plotly_chart(fig_score, use_container_width=True, config=MAP_CONFIG)
             st.caption("Darker means a better fit for this concept. Bubble size is "
                        "how many restaurants the neighbourhood already holds.")
 
@@ -973,7 +982,7 @@ Census, the only vintage published for these neighbourhood boundaries.
 
 # --------------------------------------------------------------- market gaps
 
-with tab_gaps:
+if section == "Market Gaps":
     st.subheader("What is missing from this neighbourhood?")
     st.markdown(
         "The Location Finder starts from a concept and looks for a place. This "
