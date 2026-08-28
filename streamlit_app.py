@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import hmac
 import io
+import re
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -43,6 +45,57 @@ BORO_ORDER = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
 # refreshes itself, so this is stated on the page rather than left for the reader
 # to assume the data is current.
 SNAPSHOT_DATE = "11 August 2026"
+
+# ------------------------------------------------------------------ base map
+
+# Maps are drawn from the borough outlines committed to this repository rather
+# than from a tile basemap. The tile version worked until the page was split into
+# tabs: a map component initialises with zero width while its tab is still being
+# laid out, and never recovers, so it renders as a grey box. Plain scatter traces
+# resize with their container and have no such problem — and they match the
+# figures in the notebooks.
+
+BOUNDARY_FILE = Path(__file__).parent / "data" / "cleaned" / "borough_boundaries.csv"
+RING_RE = re.compile(r"\(([-0-9\.\s,]+)\)")
+# One degree of longitude is shorter than one of latitude at New York's latitude;
+# without this correction the city comes out horizontally squashed.
+NYC_ASPECT = 1 / np.cos(np.radians(40.7))
+
+
+@st.cache_data
+def borough_outlines() -> list[list[tuple[float, float]]]:
+    if not BOUNDARY_FILE.exists():
+        return []
+    rings = []
+    for wkt in pd.read_csv(BOUNDARY_FILE)["geometry_wkt"]:
+        for group in RING_RE.findall(wkt):
+            points = [p.split() for p in group.split(",")]
+            # Boroughs are made of many rings — every island counts — and the
+            # smallest are noise at dashboard scale.
+            if len(points) > 40:
+                rings.append([(float(x), float(y)) for x, y in points])
+    return rings
+
+
+def base_map(height: int = 460) -> go.Figure:
+    """An empty map of the city, ready for points to be laid over it."""
+    fig = go.Figure()
+    for ring in borough_outlines():
+        fig.add_trace(go.Scatter(
+            x=[p[0] for p in ring], y=[p[1] for p in ring],
+            fill="toself", fillcolor="#f0efec",
+            line={"color": "#c9c8c3", "width": 0.6},
+            hoverinfo="skip", showlegend=False, mode="lines",
+        ))
+    fig.update_layout(
+        height=height, margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        xaxis={"visible": False, "range": [-74.27, -73.68]},
+        yaxis={"visible": False, "range": [40.48, 40.93],
+               "scaleanchor": "x", "scaleratio": NYC_ASPECT},
+        dragmode="pan",
+    )
+    return fig
 
 # --------------------------------------------------------------------- access
 
@@ -488,22 +541,15 @@ with tab_overview:
         st.caption("Each dot is one restaurant. Hover to see its name and cuisine.")
         mappable = view.dropna(subset=["latitude", "longitude"])
 
-        fig_map = px.scatter_map(
-            mappable,
-            lat="latitude",
-            lon="longitude",
-            hover_name="dba",
-            hover_data={"cuisine": True, "boro": True, "latitude": False, "longitude": False},
-            color_discrete_sequence=[BLUE],
-            zoom=9.2,
-            height=520,
-        )
-        fig_map.update_traces(marker={"size": 4, "opacity": 0.55})
-        fig_map.update_layout(
-            map_style="carto-positron",
-            margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        fig_map = base_map(height=520)
+        fig_map.add_trace(go.Scattergl(
+            x=mappable["longitude"], y=mappable["latitude"], mode="markers",
+            marker={"size": 3.5, "color": BLUE, "opacity": 0.5},
+            customdata=mappable[["dba", "cuisine", "boro"]].values,
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}"
+                          "<br>%{customdata[2]}<extra></extra>",
             showlegend=False,
-        )
+        ))
         st.plotly_chart(fig_map, use_container_width=True)
         st.caption(
             f"{len(mappable):,} of {len(view):,} shown. The other "
@@ -811,20 +857,21 @@ with tab_finder:
                 .agg(latitude=("latitude", "mean"), longitude=("longitude", "mean"))
             )
             plot = ranked.join(located, how="inner").reset_index()
-            fig_score = px.scatter_map(
-                plot, lat="latitude", lon="longitude",
-                size="total_restaurants", color="score",
-                color_continuous_scale=SEQ_BLUE, size_max=28, zoom=8.8, height=430,
-                hover_name="nta_name",
-                hover_data={"score": ":.0f", "same_cuisine": True,
-                            "latitude": False, "longitude": False,
-                            "total_restaurants": False},
-                labels={"score": "Opportunity"},
-            )
-            fig_score.update_layout(
-                map_style="carto-positron",
-                margin={"l": 0, "r": 0, "t": 0, "b": 0},
-            )
+            sizes = (plot["total_restaurants"] / plot["total_restaurants"].max()) ** 0.5
+            fig_score = base_map(height=430)
+            fig_score.add_trace(go.Scatter(
+                x=plot["longitude"], y=plot["latitude"], mode="markers",
+                marker={
+                    "size": 6 + sizes * 26, "color": plot["score"],
+                    "colorscale": SEQ_BLUE, "showscale": True,
+                    "colorbar": {"title": "Opportunity", "thickness": 12, "len": 0.7},
+                    "line": {"color": "white", "width": 0.8}, "opacity": 0.85,
+                },
+                customdata=plot[["nta_name", "score", "same_cuisine"]].values,
+                hovertemplate="<b>%{customdata[0]}</b><br>Score %{customdata[1]:.0f}"
+                              "<br>%{customdata[2]} existing<extra></extra>",
+                showlegend=False,
+            ))
             st.plotly_chart(fig_score, use_container_width=True)
             st.caption("Darker means a better fit for this concept. Bubble size is "
                        "how many restaurants the neighbourhood already holds.")
