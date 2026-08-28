@@ -386,9 +386,10 @@ st.caption(
 # reads as a pile of outputs rather than a product. Splitting the page by the
 # question each half answers — what does the market look like, and where should
 # I open — gives it the shape of a tool.
-tab_overview, tab_finder = st.tabs([
+tab_overview, tab_finder, tab_gaps = st.tabs([
     "Market Overview",
     "Location Finder",
+    "Market Gaps",
 ])
 
 with tab_overview:
@@ -895,6 +896,191 @@ is a shortlist for site visits, not a decision.
 population-weighted mean of tract medians, which is an approximation — a true
 neighbourhood median would need the underlying microdata. Population is the 2010
 Census, the only vintage published for these neighbourhood boundaries.
+            """
+        )
+
+# --------------------------------------------------------------- market gaps
+
+with tab_gaps:
+    st.subheader("What is missing from this neighbourhood?")
+    st.markdown(
+        "The Location Finder starts from a concept and looks for a place. This "
+        "starts from a place and looks for the concept — the question an operator "
+        "asks when the lease is already the fixed part."
+    )
+
+    gap_left, gap_right = st.columns([2, 3], gap="large")
+
+    with gap_left:
+        gap_boro = st.selectbox("Borough", options=BORO_ORDER, key="gap_boro")
+        area_options = (
+            neighborhoods[neighborhoods["borough"] == gap_boro]
+            .dropna(subset=["nta_name"])
+            .sort_values("nta_name")
+        )
+        area_options = area_options[
+            ~area_options["nta_name"].str.contains("park-cemetery-etc", case=False)
+        ]
+        area_names = ["— the whole borough —"] + area_options["nta_name"].tolist()
+        chosen_area = st.selectbox("Neighbourhood", options=area_names, key="gap_area")
+
+    with gap_right:
+        min_citywide = st.slider(
+            "Only consider cuisines with at least this many restaurants citywide",
+            min_value=50, max_value=1000, value=300, step=50,
+            help="A cuisine with a handful of locations anywhere is not a proven "
+                 "format. This filters out the long tail so the gaps that surface "
+                 "are ones somebody has already made work elsewhere.",
+        )
+        st.caption(
+            "Saturation compares competitors **per resident** here against the same "
+            "figure citywide. 1.0 means this area carries its fair share for its "
+            "population; below 1.0 means fewer competitors per potential customer "
+            "than the city average."
+        )
+
+    # ---- scope --------------------------------------------------------------
+
+    if chosen_area == "— the whole borough —":
+        local = baseline[baseline["boro"] == gap_boro]
+        local_population = float(
+            neighborhoods.loc[neighborhoods["borough"] == gap_boro, "population_2010"]
+            .fillna(0).sum()
+        )
+        area_label = gap_boro
+    else:
+        code = area_options.loc[
+            area_options["nta_name"] == chosen_area, "nta_code"
+        ].iloc[0]
+        local = baseline[baseline["nta_code"] == code]
+        local_population = float(
+            neighborhoods.loc[neighborhoods["nta_code"] == code,
+                              "population_2010"].fillna(0).iloc[0]
+        )
+        area_label = chosen_area
+
+    city_population = float(neighborhoods["population_2010"].fillna(0).sum())
+
+    if local.empty or local_population <= 0:
+        st.warning("Not enough data for this area.")
+    else:
+        established = baseline["cuisine"].value_counts()
+        established = established[established >= min_citywide]
+
+        rows = []
+        for cuisine, citywide_count in established.items():
+            here = int((local["cuisine"] == cuisine).sum())
+            # Competitors per 10,000 residents, here and citywide. Using population
+            # rather than share of restaurants answers the operator's actual
+            # question: how many rivals am I splitting these customers with?
+            here_per_10k = here / local_population * 10000
+            city_per_10k = citywide_count / city_population * 10000
+            saturation = here_per_10k / city_per_10k if city_per_10k else None
+            rows.append({
+                "Cuisine": cuisine.title(),
+                "Here": here,
+                "Per 10k residents": round(here_per_10k, 2),
+                "Citywide per 10k": round(city_per_10k, 2),
+                "Saturation": round(saturation, 2) if saturation is not None else None,
+                "At citywide rate": round(city_per_10k * local_population / 10000),
+            })
+
+        table = pd.DataFrame(rows)
+        table["Shortfall"] = (table["At citywide rate"] - table["Here"]).astype(int)
+
+        st.markdown(f"### {area_label} — {int(local_population):,} residents, "
+                    f"{len(local):,} restaurants")
+
+        gaps_only = table[table["Saturation"] < 0.5].sort_values("Saturation")
+
+        if gaps_only.empty:
+            st.info(
+                f"No established cuisine is notably under-represented in "
+                f"{area_label} — every proven format already has at least half "
+                "its citywide share here."
+            )
+        else:
+            biggest = gaps_only.iloc[0]
+            st.success(
+                f"**{biggest['Cuisine']}** is the widest gap: "
+                f"{int(biggest['Here'])} here against "
+                f"{int(biggest['At citywide rate'])} at the citywide rate for this "
+                f"population — a saturation of {biggest['Saturation']:.2f}."
+            )
+
+        chart_col, table_col2 = st.columns([2, 3], gap="large")
+
+        with chart_col:
+            plot = table.sort_values("Saturation").head(14).sort_values("Saturation")
+            fig_gap = go.Figure(go.Bar(
+                x=plot["Saturation"], y=plot["Cuisine"], orientation="h",
+                marker_color=[
+                    "#d03b3b" if v < 0.5 else BLUE if v < 1 else "#184f95"
+                    for v in plot["Saturation"]
+                ],
+                hovertemplate="%{y}: %{x:.2f}x the citywide rate<extra></extra>",
+            ))
+            fig_gap.add_vline(x=1.0, line_width=1, line_dash="dash",
+                              line_color=INK_SOFT)
+            fig_gap.update_layout(
+                height=440, margin={"l": 0, "r": 10, "t": 10, "b": 0},
+                xaxis_title="Competitors per resident, vs the city average",
+                yaxis_title=None, plot_bgcolor="rgba(0,0,0,0)",
+                xaxis={"showgrid": True, "gridcolor": "#e5e4e0"},
+            )
+            st.plotly_chart(fig_gap, use_container_width=True)
+            st.caption("Red marks cuisines running at under half the citywide rate. "
+                       "The dashed line is parity.")
+
+        with table_col2:
+            st.dataframe(
+                table.sort_values("Saturation")[
+                    ["Cuisine", "Here", "At citywide rate", "Shortfall", "Saturation"]
+                ],
+                use_container_width=True, hide_index=True, height=440,
+                column_config={
+                    "Here": st.column_config.NumberColumn(
+                        format="%d", help=f"Restaurants of this cuisine in {area_label}."),
+                    "At citywide rate": st.column_config.NumberColumn(
+                        format="%d",
+                        help="How many there would be if this area matched the city "
+                             "average for its population."),
+                    "Shortfall": st.column_config.NumberColumn(
+                        format="%d", help="The difference. Positive means fewer than "
+                                          "expected."),
+                    "Saturation": st.column_config.ProgressColumn(
+                        format="%.2f", min_value=0, max_value=3,
+                        help="Under 1.00 means less competition per resident than "
+                             "the city average."),
+                },
+            )
+
+    with st.expander("How saturation is measured"):
+        st.markdown(
+            """
+For each cuisine:
+
+$$\text{Saturation} = \frac{\text{competitors per 10,000 residents here}}
+{\text{competitors per 10,000 residents citywide}}$$
+
+Below 1.00 means fewer rivals per potential customer than the city average; above
+means more. The **shortfall** column converts that into a count — how many
+restaurants would have to open here to reach parity.
+
+**Why per resident rather than per restaurant.** The Market Overview tab compares
+each cuisine's *share* of a borough's restaurants. That answers "what is this area
+known for". An operator is asking something different: how many competitors am I
+splitting these customers with? That question needs population in the denominator.
+The two measures can disagree, and when they do it is usually because an area has
+an unusual number of restaurants for its population.
+
+**The citywide floor exists for a reason.** Without it the list fills with cuisines
+that are scarce everywhere. Requiring a proven citywide presence means each gap is
+a format somebody has already made work in New York.
+
+**A gap is not a recommendation.** Low saturation can mean an unserved market, a
+market that has rejected this cuisine, or one where operators have already tried
+and closed. Nothing here distinguishes those.
             """
         )
 
