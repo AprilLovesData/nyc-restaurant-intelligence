@@ -16,6 +16,12 @@ data/processed/*
 # reference data the dashboard scores against. Small, and it never changes.
 !data/cleaned/nta_acs_2022.csv
 
+# The dashboard's fallback copy. Supabase free projects are de-provisioned after a
+# week of inactivity, which takes the deployed app down with them. These two files
+# let it keep serving from the repository when the database is unreachable.
+!data/processed/restaurants.csv
+!data/processed/neighborhoods.csv
+
 # ---- Notebooks ----
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*

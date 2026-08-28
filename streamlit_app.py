@@ -263,11 +263,27 @@ def _to_bool(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower().isin(TRUE_TOKENS)
 
 
+# A copy of the same tables, committed to the repository. Supabase de-provisions
+# free projects after a week without traffic — the subdomain stops resolving
+# entirely — and a dashboard that dies in front of a client because nobody opened
+# it last week is worse than one serving a snapshot it is honest about.
+FALLBACK_DIR = Path(__file__).parent / "data" / "processed"
+
+
 def _cached_or_fetch(name: str, fetch) -> pd.DataFrame:
     path = CACHE_DIR / f"{name}.csv"
     if path.exists():
         return pd.read_csv(path)
-    frame = fetch()
+
+    try:
+        frame = fetch()
+    except requests.exceptions.RequestException:
+        fallback = FALLBACK_DIR / f"{name}.csv"
+        if not fallback.exists():
+            raise
+        st.session_state["using_fallback"] = True
+        return pd.read_csv(fallback)
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     frame.to_csv(path, index=False)
     return frame
@@ -297,6 +313,15 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 restaurants, neighborhoods = load_data()
+
+if st.session_state.get("using_fallback"):
+    st.warning(
+        "**Serving from the repository copy.** The database is not responding — "
+        "Supabase suspends free projects after a week without traffic — so the "
+        f"dashboard has fallen back to its committed snapshot of {SNAPSHOT_DATE}. "
+        "Every figure below is correct as of that date; nothing is missing.",
+        icon="⚠️",
+    )
 
 # Citywide cuisine shares are the baseline for the location quotient. They are
 # computed once on the full dataset and never on the filtered subset — dividing a
