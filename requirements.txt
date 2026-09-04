@@ -7,7 +7,8 @@ tabulate>=0.9          # required by DataFrame.to_markdown()
 
 # ---- dashboard (streamlit_app.py) ----
 streamlit>=1.40
-plotly>=5.24           # scatter_map needs 5.24+; earlier versions only have scatter_mapbox
+plotly>=5.24,<6        # pinned: plotly 6 switched maps to MapLibre and the map
+                       # renders as a grey box against Streamlit's bundled plotly.js
 requests>=2.31
 
 # ---- mapping (optional, for future spatial work) ----

@@ -566,7 +566,7 @@ if section == "Market Overview":
         st.caption("Each dot is one restaurant. Hover to see its name and cuisine.")
         mappable = view.dropna(subset=["latitude", "longitude"])
 
-        fig_map = px.scatter_map(
+        fig_map = px.scatter_mapbox(
             mappable, lat="latitude", lon="longitude", hover_name="dba",
             hover_data={"cuisine": True, "boro": True,
                         "latitude": False, "longitude": False},
@@ -574,7 +574,7 @@ if section == "Market Overview":
         )
         fig_map.update_traces(marker={"size": 4, "opacity": 0.55})
         fig_map.update_layout(
-            map_style="carto-positron",
+            mapbox_style="carto-positron",
             margin={"l": 0, "r": 0, "t": 0, "b": 0}, showlegend=False,
         )
         st.plotly_chart(fig_map, use_container_width=True, config=MAP_CONFIG)
@@ -891,7 +891,7 @@ if section == "Location Finder":
                 .agg(latitude=("latitude", "mean"), longitude=("longitude", "mean"))
             )
             plot = ranked.join(located, how="inner").reset_index()
-            fig_score = px.scatter_map(
+            fig_score = px.scatter_mapbox(
                 plot, lat="latitude", lon="longitude",
                 size="total_restaurants", color="score",
                 color_continuous_scale=SEQ_BLUE, size_max=30, zoom=8.9, height=430,
@@ -903,7 +903,7 @@ if section == "Location Finder":
             )
             fig_score.update_traces(marker={"opacity": 0.85})
             fig_score.update_layout(
-                map_style="carto-positron",
+                mapbox_style="carto-positron",
                 margin={"l": 0, "r": 0, "t": 0, "b": 0},
                 coloraxis_colorbar={"thickness": 12, "len": 0.7},
             )
@@ -912,7 +912,7 @@ if section == "Location Finder":
             # version of that: the answer is readable without moving your eyes to
             # a second table and matching rows by hand.
             top5 = plot.head(5)
-            fig_score.add_trace(go.Scattermap(
+            fig_score.add_trace(go.Scattermapbox(
                 lat=top5["latitude"], lon=top5["longitude"], mode="text",
                 text=[f"{i + 1}. {n}" for i, n in enumerate(top5["nta_name"])],
                 textposition="top center",
