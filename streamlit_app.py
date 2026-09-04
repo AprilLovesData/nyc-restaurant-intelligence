@@ -61,6 +61,11 @@ RING_RE = re.compile(r"\(([-0-9\.\s,]+)\)")
 # without this correction the city comes out horizontally squashed.
 NYC_ASPECT = 1 / np.cos(np.radians(40.7))
 
+# OpenStreetMap rather than CARTO's positron style: CARTO began requiring an
+# API key for its basemap, and unauthenticated tiles come back stamped
+# "API KEY REQUIRED". OSM needs no key. This is why the map changed without
+# anyone touching the code — the tile provider changed its terms, not us.
+#
 # Plotly disables scroll-zoom by default so a chart does not hijack the page
 # scroll. On a map that is the interaction people expect, so it is turned on.
 MAP_CONFIG = {"scrollZoom": True, "displayModeBar": True,
@@ -574,7 +579,7 @@ if section == "Market Overview":
         )
         fig_map.update_traces(marker={"size": 4, "opacity": 0.55})
         fig_map.update_layout(
-            mapbox_style="carto-positron",
+            mapbox_style="open-street-map",
             margin={"l": 0, "r": 0, "t": 0, "b": 0}, showlegend=False,
         )
         st.plotly_chart(fig_map, use_container_width=True, config=MAP_CONFIG)
@@ -903,7 +908,7 @@ if section == "Location Finder":
             )
             fig_score.update_traces(marker={"opacity": 0.85})
             fig_score.update_layout(
-                mapbox_style="carto-positron",
+                mapbox_style="open-street-map",
                 margin={"l": 0, "r": 0, "t": 0, "b": 0},
                 coloraxis_colorbar={"thickness": 12, "len": 0.7},
             )
