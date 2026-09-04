@@ -82,15 +82,31 @@ def borough_outlines() -> list[list[tuple[float, float]]]:
     return rings
 
 
-def base_map(height: int = 460) -> go.Figure:
-    """An empty map of the city, ready for points to be laid over it."""
+# Roughly where each borough's name sits without landing on top of the others.
+BOROUGH_LABELS = {
+    "Manhattan": (-73.968, 40.783), "Brooklyn": (-73.945, 40.645),
+    "Queens": (-73.812, 40.712), "Bronx": (-73.866, 40.855),
+    "Staten Island": (-74.152, 40.577),
+}
+
+
+def base_map(height: int = 460, labels: bool = True) -> go.Figure:
+    """The city as a backdrop, ready for points to be laid over it."""
     fig = go.Figure()
     for ring in borough_outlines():
         fig.add_trace(go.Scatter(
             x=[p[0] for p in ring], y=[p[1] for p in ring],
-            fill="toself", fillcolor="#f0efec",
-            line={"color": "#c9c8c3", "width": 0.6},
+            fill="toself", fillcolor="#eceff3",
+            line={"color": "#b9bec6", "width": 0.7},
             hoverinfo="skip", showlegend=False, mode="lines",
+        ))
+    if labels:
+        fig.add_trace(go.Scatter(
+            x=[p[0] for p in BOROUGH_LABELS.values()],
+            y=[p[1] for p in BOROUGH_LABELS.values()],
+            mode="text", text=list(BOROUGH_LABELS),
+            textfont={"size": 11, "color": "#8a9099"},
+            hoverinfo="skip", showlegend=False,
         ))
     fig.update_layout(
         height=height, margin={"l": 0, "r": 0, "t": 0, "b": 0},
@@ -846,16 +862,23 @@ if section == "Location Finder":
         st.warning("No neighbourhood matches. Widen the borough selection.")
     else:
         top = ranked.iloc[0]
-        st.success(
-            f"**{top['nta_name']}** ({top['borough']}) ranks highest for "
-            f"{target_cuisine.title()}. "
-            f"{int(top['population_2010']):,} residents, "
-            f"{int(top['same_cuisine'])} existing "
-            f"{target_cuisine.title()} restaurant"
-            f"{'' if top['same_cuisine'] == 1 else 's'}"
-            + (f", median household income ${int(top['median_income']):,}."
-               if has_income and pd.notna(top["median_income"]) else ".")
+        st.markdown(
+            f"#### Best fit for {target_cuisine.title()}: "
+            f":blue[{top['nta_name']}] · {top['borough']}"
         )
+        # Three numbers side by side rather than one grey sentence — this is the
+        # answer, and it should look like the answer.
+        f1, f2, f3, f4 = st.columns(4)
+        f1.metric("Opportunity score", f"{top['score']:.0f}", help="0-100.")
+        f2.metric("Residents", f"{int(top['population_2010']):,}")
+        f3.metric(
+            f"Existing {target_cuisine.title()}", f"{int(top['same_cuisine'])}",
+            help="Restaurants of this cuisine already trading there.",
+        )
+        if has_income and pd.notna(top["median_income"]):
+            f4.metric("Median income", f"${int(top['median_income']):,}")
+        else:
+            f4.metric("Median income", "—")
 
         map_col2, table_col = st.columns([2, 3], gap="large")
 
@@ -881,9 +904,21 @@ if section == "Location Finder":
                               "<br>%{customdata[2]} existing<extra></extra>",
                 showlegend=False,
             ))
+            # Scott asked whether the map and the ranked list could be brought
+            # together. Naming the top five on the map itself is the cheapest
+            # version of that: the answer is readable without moving your eyes to
+            # a second table and matching rows by hand.
+            top5 = plot.head(5)
+            fig_score.add_trace(go.Scatter(
+                x=top5["longitude"], y=top5["latitude"], mode="text",
+                text=[f"<b>{i + 1}. {n}</b>" for i, n in enumerate(top5["nta_name"])],
+                textposition="top center",
+                textfont={"size": 11, "color": "#0d366b"},
+                hoverinfo="skip", showlegend=False,
+            ))
             st.plotly_chart(fig_score, use_container_width=True, config=MAP_CONFIG)
-            st.caption("Darker means a better fit for this concept. Bubble size is "
-                       "how many restaurants the neighbourhood already holds.")
+            st.caption("Labels mark the top five. Darker and larger means a better "
+                       "fit — drag to pan, scroll to zoom.")
 
         with table_col:
             shortlist = ranked.head(12).reset_index()
@@ -1082,36 +1117,64 @@ if section == "Market Gaps":
             )
         else:
             biggest = gaps_only.iloc[0]
-            st.success(
-                f"**{biggest['Cuisine']}** is the widest gap: "
-                f"{int(biggest['Here'])} here against "
-                f"{int(biggest['At citywide rate'])} at the citywide rate for this "
-                f"population — a saturation of {biggest['Saturation']:.2f}."
+            st.markdown(f"#### Widest gap: :red[{biggest['Cuisine']}]")
+            g1, g2, g3 = st.columns(3)
+            g1.metric("Trading here", f"{int(biggest['Here'])}")
+            g2.metric(
+                "Expected at parity", f"{int(biggest['At citywide rate'])}",
+                delta=f"{int(biggest['Shortfall']):+d} short", delta_color="inverse",
+                help="What this area's population would support at the citywide rate.",
+            )
+            g3.metric(
+                "Saturation", f"{biggest['Saturation']:.2f}x",
+                help="Competitors per resident, against the city average. "
+                     "1.00 is parity.",
             )
 
         chart_col, table_col2 = st.columns([2, 3], gap="large")
 
         with chart_col:
             plot = table.sort_values("Saturation").head(14).sort_values("Saturation")
+            # The chart and the table were saying the same thing in two places.
+            # Writing the shortfall onto each bar means one glance answers both
+            # "how far below parity" and "how many restaurants is that".
+            bar_labels = [
+                f"  {int(s):+d} restaurants" if s else "  at parity"
+                for s in plot["Shortfall"]
+            ]
             fig_gap = go.Figure(go.Bar(
                 x=plot["Saturation"], y=plot["Cuisine"], orientation="h",
                 marker_color=[
-                    "#d03b3b" if v < 0.5 else BLUE if v < 1 else "#184f95"
+                    "#d03b3b" if v < 0.5 else "#e88b8b" if v < 0.8
+                    else BLUE if v < 1.2 else "#184f95"
                     for v in plot["Saturation"]
                 ],
-                hovertemplate="%{y}: %{x:.2f}x the citywide rate<extra></extra>",
+                text=bar_labels, textposition="outside",
+                textfont={"size": 11, "color": INK_SOFT},
+                cliponaxis=False,
+                customdata=plot[["Here", "At citywide rate"]].values,
+                hovertemplate="<b>%{y}</b><br>%{x:.2f}x the citywide rate"
+                              "<br>%{customdata[0]} here, %{customdata[1]} at parity"
+                              "<extra></extra>",
             ))
-            fig_gap.add_vline(x=1.0, line_width=1, line_dash="dash",
+            fig_gap.add_vline(x=1.0, line_width=1.5, line_dash="dash",
                               line_color=INK_SOFT)
+            fig_gap.add_annotation(
+                x=1.0, y=1.02, yref="paper", text="parity", showarrow=False,
+                font={"size": 10, "color": INK_SOFT},
+            )
             fig_gap.update_layout(
-                height=440, margin={"l": 0, "r": 10, "t": 10, "b": 0},
-                xaxis_title="Competitors per resident, vs the city average",
+                height=460, margin={"l": 0, "r": 90, "t": 24, "b": 0},
+                xaxis_title="Competitors per resident, against the city average",
                 yaxis_title=None, plot_bgcolor="rgba(0,0,0,0)",
                 xaxis={"showgrid": True, "gridcolor": "#e5e4e0"},
             )
             st.plotly_chart(fig_gap, use_container_width=True)
-            st.caption("Red marks cuisines running at under half the citywide rate. "
-                       "The dashed line is parity.")
+            st.caption(
+                "**:red[Red]** runs at under half the citywide rate · "
+                "**:blue[Blue]** is near or above it · the number on each bar is "
+                "how many restaurants it would take to reach parity."
+            )
 
         with table_col2:
             st.dataframe(
@@ -1139,10 +1202,8 @@ if section == "Market Gaps":
     with st.expander("How saturation is measured"):
         st.markdown(
             """
-For each cuisine:
-
-$$\text{Saturation} = \frac{\text{competitors per 10,000 residents here}}
-{\text{competitors per 10,000 residents citywide}}$$
+**Saturation** = competitors per 10,000 residents *here*, divided by competitors per
+10,000 residents *citywide*.
 
 Below 1.00 means fewer rivals per potential customer than the city average; above
 means more. The **shortfall** column converts that into a count — how many
