@@ -566,15 +566,17 @@ if section == "Market Overview":
         st.caption("Each dot is one restaurant. Hover to see its name and cuisine.")
         mappable = view.dropna(subset=["latitude", "longitude"])
 
-        fig_map = base_map(height=520)
-        fig_map.add_trace(go.Scattergl(
-            x=mappable["longitude"], y=mappable["latitude"], mode="markers",
-            marker={"size": 3.5, "color": BLUE, "opacity": 0.5},
-            customdata=mappable[["dba", "cuisine", "boro"]].values,
-            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}"
-                          "<br>%{customdata[2]}<extra></extra>",
-            showlegend=False,
-        ))
+        fig_map = px.scatter_map(
+            mappable, lat="latitude", lon="longitude", hover_name="dba",
+            hover_data={"cuisine": True, "boro": True,
+                        "latitude": False, "longitude": False},
+            color_discrete_sequence=[BLUE], zoom=9.3, height=520,
+        )
+        fig_map.update_traces(marker={"size": 4, "opacity": 0.55})
+        fig_map.update_layout(
+            map_style="carto-positron",
+            margin={"l": 0, "r": 0, "t": 0, "b": 0}, showlegend=False,
+        )
         st.plotly_chart(fig_map, use_container_width=True, config=MAP_CONFIG)
         st.caption(
             f"{len(mappable):,} of {len(view):,} shown. The other "
@@ -889,31 +891,32 @@ if section == "Location Finder":
                 .agg(latitude=("latitude", "mean"), longitude=("longitude", "mean"))
             )
             plot = ranked.join(located, how="inner").reset_index()
-            sizes = (plot["total_restaurants"] / plot["total_restaurants"].max()) ** 0.5
-            fig_score = base_map(height=430)
-            fig_score.add_trace(go.Scatter(
-                x=plot["longitude"], y=plot["latitude"], mode="markers",
-                marker={
-                    "size": 6 + sizes * 26, "color": plot["score"],
-                    "colorscale": SEQ_BLUE, "showscale": True,
-                    "colorbar": {"title": "Opportunity", "thickness": 12, "len": 0.7},
-                    "line": {"color": "white", "width": 0.8}, "opacity": 0.85,
-                },
-                customdata=plot[["nta_name", "score", "same_cuisine"]].values,
-                hovertemplate="<b>%{customdata[0]}</b><br>Score %{customdata[1]:.0f}"
-                              "<br>%{customdata[2]} existing<extra></extra>",
-                showlegend=False,
-            ))
+            fig_score = px.scatter_map(
+                plot, lat="latitude", lon="longitude",
+                size="total_restaurants", color="score",
+                color_continuous_scale=SEQ_BLUE, size_max=30, zoom=8.9, height=430,
+                hover_name="nta_name",
+                hover_data={"score": ":.0f", "same_cuisine": True,
+                            "latitude": False, "longitude": False,
+                            "total_restaurants": False},
+                labels={"score": "Opportunity"},
+            )
+            fig_score.update_traces(marker={"opacity": 0.85})
+            fig_score.update_layout(
+                map_style="carto-positron",
+                margin={"l": 0, "r": 0, "t": 0, "b": 0},
+                coloraxis_colorbar={"thickness": 12, "len": 0.7},
+            )
             # Scott asked whether the map and the ranked list could be brought
             # together. Naming the top five on the map itself is the cheapest
             # version of that: the answer is readable without moving your eyes to
             # a second table and matching rows by hand.
             top5 = plot.head(5)
-            fig_score.add_trace(go.Scatter(
-                x=top5["longitude"], y=top5["latitude"], mode="text",
-                text=[f"<b>{i + 1}. {n}</b>" for i, n in enumerate(top5["nta_name"])],
+            fig_score.add_trace(go.Scattermap(
+                lat=top5["latitude"], lon=top5["longitude"], mode="text",
+                text=[f"{i + 1}. {n}" for i, n in enumerate(top5["nta_name"])],
                 textposition="top center",
-                textfont={"size": 11, "color": "#0d366b"},
+                textfont={"size": 12, "color": "#0d366b"},
                 hoverinfo="skip", showlegend=False,
             ))
             st.plotly_chart(fig_score, use_container_width=True, config=MAP_CONFIG)
@@ -931,18 +934,22 @@ if section == "Location Finder":
             if has_income:
                 display_cols["median_income"] = "Median income"
             table = shortlist[list(display_cols)].rename(columns=display_cols)
+            # Scott's phrase was "just the normal tables". A shaded score column
+            # turns the ranking into something you read at a glance instead of
+            # comparing numbers row by row.
+            styled = table.style.background_gradient(
+                subset=["Score"], cmap="Blues", vmin=0, vmax=100,
+            ).format({"Score": "{:.0f}", "Residents": "{:,.0f}",
+                      "Residents per competitor": "{:,.0f}"}
+                     | ({"Median income": "${:,.0f}"} if has_income else {}))
             st.dataframe(
-                table, use_container_width=True, hide_index=True, height=430,
+                styled, use_container_width=True, hide_index=True, height=430,
                 column_config={
-                    "Score": st.column_config.ProgressColumn(
-                        format="%d", min_value=0, max_value=100,
+                    "Score": st.column_config.Column(
                         help="0-100, blended from the three weights above."),
-                    "Residents": st.column_config.NumberColumn(format="%d"),
-                    "Residents per competitor": st.column_config.NumberColumn(
-                        format="%d",
+                    "Residents per competitor": st.column_config.Column(
                         help=f"People per existing {target_cuisine.title()} "
                              "restaurant. Higher means less contested."),
-                    "Median income": st.column_config.NumberColumn(format="$%d"),
                 },
             )
 
@@ -1177,23 +1184,28 @@ if section == "Market Gaps":
             )
 
         with table_col2:
+            gap_table = table.sort_values("Saturation")[
+                ["Cuisine", "Here", "At citywide rate", "Shortfall", "Saturation"]
+            ]
+            # Red where a cuisine is thin on the ground, blue where it is crowded,
+            # centred on parity — the same colour language as the Market Overview
+            # heatmap, so the two read as one product.
+            styled_gaps = gap_table.style.background_gradient(
+                subset=["Saturation"], cmap="RdBu", vmin=0, vmax=2,
+            ).format({"Saturation": "{:.2f}", "Here": "{:,.0f}",
+                      "At citywide rate": "{:,.0f}", "Shortfall": "{:+,.0f}"})
             st.dataframe(
-                table.sort_values("Saturation")[
-                    ["Cuisine", "Here", "At citywide rate", "Shortfall", "Saturation"]
-                ],
+                styled_gaps,
                 use_container_width=True, hide_index=True, height=440,
                 column_config={
-                    "Here": st.column_config.NumberColumn(
-                        format="%d", help=f"Restaurants of this cuisine in {area_label}."),
-                    "At citywide rate": st.column_config.NumberColumn(
-                        format="%d",
+                    "Here": st.column_config.Column(
+                        help=f"Restaurants of this cuisine in {area_label}."),
+                    "At citywide rate": st.column_config.Column(
                         help="How many there would be if this area matched the city "
                              "average for its population."),
-                    "Shortfall": st.column_config.NumberColumn(
-                        format="%d", help="The difference. Positive means fewer than "
-                                          "expected."),
-                    "Saturation": st.column_config.ProgressColumn(
-                        format="%.2f", min_value=0, max_value=3,
+                    "Shortfall": st.column_config.Column(
+                        help="Positive means fewer than expected."),
+                    "Saturation": st.column_config.Column(
                         help="Under 1.00 means less competition per resident than "
                              "the city average."),
                 },
