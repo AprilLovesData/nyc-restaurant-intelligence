@@ -1,8 +1,5 @@
 # Data Refresh — Standard Operating Procedure
 
-> **Draft.** Written before the Week 2 review; to be confirmed against whatever
-> Scott decides about refresh cadence and ownership.
-
 **Purpose:** bring the platform from a stale snapshot to current city data.
 **Who runs it:** anyone with the repository and the Supabase service key.
 **How long:** 20–40 minutes, most of it the 158 MB download.
@@ -100,9 +97,14 @@ it wholesale.
 
 ---
 
-## 6. Open questions for review
+## 6. Decisions still to confirm
 
-- How often should this run, and who owns it?
-- Should refreshes be recorded somewhere, so a chart can be traced to a vintage?
-- Is a history table worth adding, given the source's rolling window means anything
-  not captured is lost permanently?
+These are recommendations, not settled policy. Each has a default that holds until
+someone decides otherwise.
+
+| Question | Recommended default |
+|---|---|
+| How often should this run? | Monthly, and always before client-facing use. The source updates daily, but market structure does not move that fast. |
+| Who owns it? | Whoever is maintaining the platform. It is one command; it does not need a dedicated owner. |
+| Should each refresh be recorded? | Yes — the snapshot date is already shown in the dashboard. A one-line entry per refresh would let any chart be traced to a vintage. |
+| Should history be preserved? | Not yet. The source is a rolling three-year window, so anything not captured is lost permanently; a history table would need to start now and would only pay off in a year. Worth revisiting if trend analysis becomes a priority. |

@@ -1,8 +1,5 @@
 # Consultant User Guide
 
-> **Draft.** Written before the Week 2 review. The worked examples are real; the
-> structure will follow whatever Scott decides the tool is mainly used for.
-
 **The platform:** https://nyc-restaurant-intelligence.streamlit.app
 **Sign-in:** required. Credentials are issued per person.
 
@@ -135,8 +132,16 @@ analysis that names its own limits than one a client finds them in.
 
 ---
 
-## Open questions for review
+## Producing a client deliverable
 
-- Should this guide cover exporting figures into client decks?
-- Is a standard client-facing summary report wanted, and in what format?
-- Should consultants get individual sign-ins rather than a shared one?
+A template for the written output is in
+[client_summary_report_template.md](client_summary_report_template.md), with a fully
+worked example. Any figure can be exported as an image using the camera icon that
+appears in its top-right corner on hover.
+
+## Still to confirm
+
+| Question | Current position |
+|---|---|
+| Individual sign-ins per consultant? | Everyone shares one set of credentials at present. Individual accounts are straightforward to add, and would be needed before anyone outside Gateway is given access. |
+| Should clients get access to the dashboard itself? | Not yet. The sign-in gate controls who opens the page but not which rows they see, so a client would see the whole city — including whatever another client is looking at. Per-user data permissions are the first item on the roadmap. |

@@ -1,8 +1,7 @@
 # Product Roadmap
 
-> **Draft.** Written before the Week 2 review, to be reordered once Scott confirms
-> priorities. Ordering below reflects what the current build makes cheap or
-> expensive, not what the business necessarily wants first.
+> Ordering below reflects what the current build makes cheap or expensive. It is a
+> starting point for a priority conversation, not a decision already taken.
 
 ---
 
